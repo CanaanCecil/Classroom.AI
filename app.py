@@ -31,6 +31,10 @@ BAD_WORDS = {
     "sex",
     "drugs",
     "violence",
+    "shit",
+    "fuck",
+    "fucking",
+    "bitch",
 }
 
 STOPWORDS = {
@@ -90,6 +94,15 @@ def init_db():
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (classroom_id) REFERENCES classrooms (id),
                 FOREIGN KEY (interaction_id) REFERENCES interactions (id)
+            );
+
+            CREATE TABLE IF NOT EXISTS blocked_words (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                classroom_id INTEGER NOT NULL,
+                word TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(classroom_id, word),
+                FOREIGN KEY (classroom_id) REFERENCES classrooms (id)
             );
             """
         )
@@ -187,9 +200,77 @@ def find_classroom(join_code):
         return dict(row) if row else None
 
 
-def is_inappropriate(question):
+def normalize_blocked_word(word):
+    cleaned = re.sub(r"[^a-z0-9']+", "", str(word).strip().lower())
+    return cleaned
+
+
+def list_custom_blocked_words(classroom_id):
+    with DB_LOCK, db_connect() as conn:
+        rows = conn.execute(
+            "SELECT word FROM blocked_words WHERE classroom_id = ? ORDER BY word ASC",
+            (classroom_id,),
+        ).fetchall()
+    return [r["word"] for r in rows]
+
+
+def get_blocked_words(join_code):
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+    custom_words = list_custom_blocked_words(classroom["id"])
+    return HTTPStatus.OK, {"blockedWords": custom_words}
+
+
+def add_blocked_word(payload):
+    join_code = str(payload.get("joinCode", "")).strip().upper()
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    word = normalize_blocked_word(payload.get("word", ""))
+    if len(word) < 2:
+        return HTTPStatus.BAD_REQUEST, {"error": "Blocked word must be at least 2 characters."}
+
+    now = dt.datetime.utcnow().isoformat()
+    with DB_LOCK, db_connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO blocked_words (classroom_id, word, created_at) VALUES (?, ?, ?)",
+            (classroom["id"], word, now),
+        )
+        conn.commit()
+
+    return HTTPStatus.OK, {"ok": True, "word": word}
+
+
+def remove_blocked_word(payload):
+    join_code = str(payload.get("joinCode", "")).strip().upper()
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    word = normalize_blocked_word(payload.get("word", ""))
+    if not word:
+        return HTTPStatus.BAD_REQUEST, {"error": "word is required."}
+
+    with DB_LOCK, db_connect() as conn:
+        conn.execute(
+            "DELETE FROM blocked_words WHERE classroom_id = ? AND word = ?",
+            (classroom["id"], word),
+        )
+        conn.commit()
+
+    return HTTPStatus.OK, {"ok": True}
+
+
+def is_inappropriate(question, extra_words=None):
     q = question.lower()
-    return any(w in q for w in BAD_WORDS)
+    tokens = set(re.findall(r"[a-z0-9']+", q))
+    blocked_words = set(BAD_WORDS)
+    if extra_words:
+        blocked_words.update(normalize_blocked_word(w) for w in extra_words)
+        blocked_words.discard("")
+    return any(word in tokens for word in blocked_words)
 
 
 def within_topic(question, topic_limit):
@@ -286,8 +367,10 @@ def post_question(payload):
     if not classroom["ai_enabled"]:
         return HTTPStatus.FORBIDDEN, {"error": "AI is turned off by teacher."}
 
+    custom_blocked_words = list_custom_blocked_words(classroom["id"])
+
     blocked = False
-    if is_inappropriate(question):
+    if is_inappropriate(question, custom_blocked_words):
         blocked = True
         response = "Your question was blocked by the classroom safety filter. Please rephrase respectfully."
     elif not within_topic(question, classroom["topic_limit"]):
@@ -582,6 +665,14 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             status, payload = build_analytics(join_code)
             return json_response(self, status, payload)
 
+        if path == "/api/blocked-words":
+            if not require_teacher_auth(self):
+                return
+            qs = parse_qs(parsed.query)
+            join_code = (qs.get("joinCode") or [""])[0].strip().upper()
+            status, payload = get_blocked_words(join_code)
+            return json_response(self, status, payload)
+
         if path == "/api/export":
             if not require_teacher_auth(self):
                 return
@@ -645,6 +736,18 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             if not require_teacher_auth(self):
                 return
             status, body = moderate_interaction(payload)
+            return json_response(self, status, body)
+
+        if parsed.path == "/api/blocked-words/add":
+            if not require_teacher_auth(self):
+                return
+            status, body = add_blocked_word(payload)
+            return json_response(self, status, body)
+
+        if parsed.path == "/api/blocked-words/remove":
+            if not require_teacher_auth(self):
+                return
+            status, body = remove_blocked_word(payload)
             return json_response(self, status, body)
 
         return text_response(self, HTTPStatus.NOT_FOUND, "Not Found")
