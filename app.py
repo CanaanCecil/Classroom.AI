@@ -434,6 +434,17 @@ def list_broadcasts(join_code):
     return HTTPStatus.OK, {"broadcasts": [dict(r) for r in rows]}
 
 
+
+
+def get_filter_words(join_code):
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    custom_words = parse_custom_bad_words(classroom.get("custom_bad_words", "[]"))
+    merged = sorted(set(BAD_WORDS) | set(custom_words))
+    return HTTPStatus.OK, {"words": merged}
+
 def update_settings(payload):
     join_code = str(payload.get("joinCode", "")).strip().upper()
     classroom = find_classroom(join_code)
@@ -621,6 +632,12 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             join_code = (qs.get("joinCode") or [""])[0].strip().upper()
             status, payload = list_broadcasts(join_code)
+            return json_response(self, status, payload)
+
+        if path == "/api/filter-words":
+            qs = parse_qs(parsed.query)
+            join_code = (qs.get("joinCode") or [""])[0].strip().upper()
+            status, payload = get_filter_words(join_code)
             return json_response(self, status, payload)
 
         if path == "/api/analytics":
