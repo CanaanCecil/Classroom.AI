@@ -3,6 +3,8 @@ const gradeLevelEl = document.getElementById('gradeLevel');
 const toneEl = document.getElementById('tone');
 const topicLimitEl = document.getElementById('topicLimit');
 const aiEnabledEl = document.getElementById('aiEnabled');
+const customBadWordInputEl = document.getElementById('customBadWordInput');
+const customBadWordsListEl = document.getElementById('customBadWordsList');
 const saveBtn = document.getElementById('saveSettings');
 const feedEl = document.getElementById('feed');
 const analyticsEl = document.getElementById('analytics');
@@ -12,6 +14,8 @@ const blockedWordInputEl = document.getElementById('blockedWordInput');
 const addBlockedWordBtn = document.getElementById('addBlockedWordBtn');
 const blockedWordsListEl = document.getElementById('blockedWordsList');
 
+let customBadWords = [];
+let customBadWordsDirty = false;
 
 async function logout() {
   await fetch('/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -27,6 +31,41 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function normalizeWord(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function renderCustomBadWords() {
+  if (!customBadWords.length) {
+    customBadWordsListEl.innerHTML = '<small>No custom blocked words yet.</small>';
+    return;
+  }
+
+  customBadWordsListEl.innerHTML = customBadWords.map((word) => `
+    <span class="chip">
+      ${escapeHtml(word)}
+      <button type="button" class="chip-remove" aria-label="Remove ${escapeHtml(word)}" data-word="${escapeHtml(word)}">×</button>
+    </span>
+  `).join('');
+}
+
+function addCustomBadWord(value) {
+  const normalized = normalizeWord(value);
+  if (!normalized || customBadWords.includes(normalized)) {
+    return;
+  }
+  customBadWords.push(normalized);
+  customBadWords.sort((a, b) => a.localeCompare(b));
+  customBadWordsDirty = true;
+  renderCustomBadWords();
+}
+
+function removeCustomBadWord(word) {
+  customBadWords = customBadWords.filter((current) => current !== word);
+  customBadWordsDirty = true;
+  renderCustomBadWords();
+}
+
 async function saveSettings() {
   const payload = {
     joinCode: joinCodeEl.value.trim().toUpperCase(),
@@ -34,6 +73,7 @@ async function saveSettings() {
     gradeLevel: gradeLevelEl.value.trim(),
     tone: toneEl.value,
     topicLimit: topicLimitEl.value.trim(),
+    customBadWords,
   };
 
   const res = await fetch('/api/settings', {
@@ -46,6 +86,7 @@ async function saveSettings() {
     alert(data.error || 'Unable to save settings');
     return;
   }
+  customBadWordsDirty = false;
   await refreshAll();
 }
 
@@ -195,6 +236,17 @@ async function refreshAll() {
     gradeLevelEl.value = classroom.grade_level || '';
     toneEl.value = classroom.tone || 'simple';
     topicLimitEl.value = classroom.topic_limit || '';
+    if (!customBadWordsDirty) {
+      try {
+        const parsedWords = JSON.parse(classroom.custom_bad_words || '[]');
+        customBadWords = Array.isArray(parsedWords)
+          ? parsedWords.map(normalizeWord).filter(Boolean)
+          : [];
+      } catch {
+        customBadWords = [];
+      }
+      renderCustomBadWords();
+    }
     renderFeed(interactionsData.interactions || []);
   } else {
     feedEl.innerHTML = `<small>${escapeHtml(interactionsData.error || 'Failed to load interactions')}</small>`;
@@ -220,6 +272,23 @@ blockedWordInputEl.addEventListener('keydown', (event) => {
     event.preventDefault();
     addBlockedWord();
   }
+customBadWordInputEl.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') {
+    return;
+  }
+  event.preventDefault();
+  addCustomBadWord(customBadWordInputEl.value);
+  customBadWordInputEl.value = '';
+});
+customBadWordsListEl.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  if (!target.classList.contains('chip-remove')) {
+    return;
+  }
+  removeCustomBadWord(normalizeWord(target.dataset.word));
 });
 setInterval(refreshAll, 4000);
 refreshAll();
