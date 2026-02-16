@@ -266,6 +266,12 @@ window.__moderate = moderate;
 window.__removeBlockedWord = removeBlockedWord;
 saveBtn.addEventListener('click', saveSettings);
 logoutBtn.addEventListener('click', logout);
+addBlockedWordBtn.addEventListener('click', addBlockedWord);
+blockedWordInputEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    addBlockedWord();
+  }
 customBadWordInputEl.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter') {
     return;

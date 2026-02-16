@@ -208,6 +208,77 @@ def find_classroom(join_code):
         return dict(row) if row else None
 
 
+def normalize_blocked_word(word):
+    cleaned = re.sub(r"[^a-z0-9']+", "", str(word).strip().lower())
+    return cleaned
+
+
+def list_custom_blocked_words(classroom_id):
+    with DB_LOCK, db_connect() as conn:
+        rows = conn.execute(
+            "SELECT word FROM blocked_words WHERE classroom_id = ? ORDER BY word ASC",
+            (classroom_id,),
+        ).fetchall()
+    return [r["word"] for r in rows]
+
+
+def get_blocked_words(join_code):
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+    custom_words = list_custom_blocked_words(classroom["id"])
+    return HTTPStatus.OK, {"blockedWords": custom_words}
+
+
+def add_blocked_word(payload):
+    join_code = str(payload.get("joinCode", "")).strip().upper()
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    word = normalize_blocked_word(payload.get("word", ""))
+    if len(word) < 2:
+        return HTTPStatus.BAD_REQUEST, {"error": "Blocked word must be at least 2 characters."}
+
+    now = dt.datetime.utcnow().isoformat()
+    with DB_LOCK, db_connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO blocked_words (classroom_id, word, created_at) VALUES (?, ?, ?)",
+            (classroom["id"], word, now),
+        )
+        conn.commit()
+
+    return HTTPStatus.OK, {"ok": True, "word": word}
+
+
+def remove_blocked_word(payload):
+    join_code = str(payload.get("joinCode", "")).strip().upper()
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    word = normalize_blocked_word(payload.get("word", ""))
+    if not word:
+        return HTTPStatus.BAD_REQUEST, {"error": "word is required."}
+
+    with DB_LOCK, db_connect() as conn:
+        conn.execute(
+            "DELETE FROM blocked_words WHERE classroom_id = ? AND word = ?",
+            (classroom["id"], word),
+        )
+        conn.commit()
+
+    return HTTPStatus.OK, {"ok": True}
+
+
+def is_inappropriate(question, extra_words=None):
+    q = question.lower()
+    tokens = set(re.findall(r"[a-z0-9']+", q))
+    blocked_words = set(BAD_WORDS)
+    if extra_words:
+        blocked_words.update(normalize_blocked_word(w) for w in extra_words)
+        blocked_words.discard("")
+    return any(word in tokens for word in blocked_words)
 def is_inappropriate(question):
     return is_inappropriate_for_words(question, BAD_WORDS)
 
@@ -343,6 +414,7 @@ def post_question(payload):
     custom_blocked_words = list_custom_blocked_words(classroom["id"])
 
     blocked = False
+    if is_inappropriate(question, custom_blocked_words):
     if is_inappropriate_for_words(question, get_classroom_bad_words(classroom)):
         blocked = True
         response = "Your question was blocked by the classroom safety filter. Please rephrase respectfully."
