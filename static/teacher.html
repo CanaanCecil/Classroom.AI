@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Classroom AI Assistant - Teacher Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Teacher Dashboard</h1>
+      <p>Real-time visibility and control for classroom AI interactions.</p>
+    </header>
+
+    <section class="card">
+      <h2>Classroom Controls</h2>
+      <div class="grid-4">
+        <label>Join Code
+          <input id="joinCode" value="ABC123" maxlength="12" />
+        </label>
+        <label>Grade Level
+          <input id="gradeLevel" value="6-8" />
+        </label>
+        <label>AI Tone
+          <select id="tone">
+            <option>simple</option>
+            <option>detailed</option>
+            <option>step-by-step</option>
+          </select>
+        </label>
+        <label>Topic Limit
+          <input id="topicLimit" placeholder="e.g. Algebra II" />
+        </label>
+      </div>
+      <label class="inline"><input type="checkbox" id="aiEnabled" checked /> AI Enabled</label>
+      <button id="saveSettings">Save Settings</button>
+      <a id="exportLink" href="#">Download Weekly CSV Report</a>
+    </section>
+
+    <section class="card">
+      <h2>Live Q&A Feed</h2>
+      <div id="feed"></div>
+    </section>
+
+    <section class="card">
+      <h2>Learning Analytics</h2>
+      <div id="analytics"></div>
+    </section>
+  </div>
+
+  <script src="/static/teacher.js"></script>
+</body>
+</html>
