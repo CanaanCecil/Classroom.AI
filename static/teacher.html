@@ -34,6 +34,10 @@
         </label>
       </div>
       <label class="inline"><input type="checkbox" id="aiEnabled" checked /> AI Enabled</label>
+      <label>Custom Inappropriate Words
+        <input id="customBadWordInput" placeholder="Type a word and press Enter" />
+      </label>
+      <div id="customBadWordsList" class="chip-list" aria-live="polite"></div>
       <button id="saveSettings">Save Settings</button>
       <button id="logoutBtn" class="secondary">Logout</button>
       <a id="exportLink" href="#">Download Weekly CSV Report</a>
