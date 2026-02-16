@@ -1,0 +1,122 @@
+:root {
+  --bg: #f4f7fb;
+  --card: #ffffff;
+  --text: #182230;
+  --muted: #607086;
+  --primary: #3258e8;
+  --danger: #d1385d;
+  --ok: #198754;
+  --border: #d7e0ec;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+}
+
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+header h1 { margin-bottom: 4px; }
+header p { margin-top: 0; color: var(--muted); }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.grid-2, .grid-4 {
+  display: grid;
+  gap: 10px;
+}
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.inline { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; margin-top: 10px; }
+
+input, textarea, select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 14px;
+  color: var(--text);
+  background: #fff;
+}
+
+button, a.button {
+  margin-top: 10px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+#exportLink {
+  display: inline-block;
+  margin-left: 10px;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.response {
+  margin-top: 10px;
+  white-space: pre-wrap;
+  background: #eff4ff;
+  border: 1px solid #dbe6ff;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #fbfdff;
+}
+.item small { color: var(--muted); }
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 2px 8px;
+  margin-left: 6px;
+}
+.badge.warn { background: #fff1f3; color: var(--danger); }
+.badge.ok { background: #edfff5; color: var(--ok); }
+
+.actions button {
+  margin-top: 8px;
+  margin-right: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.kpi {
+  display: inline-block;
+  margin-right: 18px;
+  margin-bottom: 8px;
+}
+
+ul { margin-top: 8px; }

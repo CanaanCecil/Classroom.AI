@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teacher Login - Classroom AI Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="container" style="max-width:560px;">
+    <header>
+      <h1>Teacher Login</h1>
+      <p>Sign in to access the teacher dashboard.</p>
+    </header>
+
+    <section class="card">
+      <label>Username
+        <input id="username" value="Teacher" autocomplete="username" />
+      </label>
+      <label>Password
+        <input id="password" type="password" placeholder="Enter password" autocomplete="current-password" />
+      </label>
+      <button id="loginBtn">Login</button>
+      <p id="errorMsg" style="color:#d1385d;"></p>
+      <small>Demo credentials: <code>Teacher</code> / <code>Teacher123</code></small>
+    </section>
+  </div>
+
+  <script src="/static/teacher_login.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Classroom AI Assistant - Student</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Classroom AI Assistant</h1>
+      <p>Ask questions safely with teacher oversight.</p>
+    </header>
+
+    <section class="card">
+      <h2>Join Classroom</h2>
+      <div class="grid-2">
+        <label>Join Code
+          <input id="joinCode" value="ABC123" maxlength="12" />
+        </label>
+        <label>Your Name (optional)
+          <input id="studentName" placeholder="e.g. Alex" />
+        </label>
+      </div>
+      <label class="inline">
+        <input type="checkbox" id="anonymous" /> Ask anonymously
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Ask a Question</h2>
+      <textarea id="question" rows="4" placeholder="Type your class question..."></textarea>
+      <button id="askBtn">Ask AI</button>
+      <div id="responseBox" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>Teacher Broadcasts</h2>
+      <div id="broadcasts"></div>
+    </section>
+  </div>
+
+  <script src="/static/student.js"></script>
+</body>
+</html>
