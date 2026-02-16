@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teacher Page</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f5f7fb;
+        color: #1f2937;
+      }
+
+      .container {
+        max-width: 760px;
+        margin: 48px auto;
+        padding: 0 20px;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        padding: 24px;
+      }
+
+      h1 {
+        margin-top: 0;
+        margin-bottom: 8px;
+        font-size: 28px;
+      }
+
+      p {
+        margin-top: 0;
+        margin-bottom: 20px;
+        color: #4b5563;
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px 14px;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        font-size: 16px;
+      }
+
+      input[type="text"]:focus {
+        outline: 2px solid #93c5fd;
+        border-color: #60a5fa;
+      }
+
+      .hint {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #6b7280;
+      }
+
+      .chip-list {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        background: #e0e7ff;
+        color: #312e81;
+        border-radius: 999px;
+        padding: 8px 10px 8px 12px;
+        font-size: 14px;
+        gap: 8px;
+      }
+
+      .chip button {
+        border: 0;
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        cursor: pointer;
+        background: #c7d2fe;
+        color: #312e81;
+        font-size: 14px;
+        line-height: 1;
+        padding: 0;
+      }
+
+      .chip button:hover {
+        background: #a5b4fc;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section class="card" aria-labelledby="teacher-page-title">
+        <h1 id="teacher-page-title">Teacher Page</h1>
+        <p>
+          Add custom words to the inappropriate content filter. Press Enter to add each word.
+        </p>
+
+        <label for="blocked-word-input">Add blocked word</label>
+        <input
+          id="blocked-word-input"
+          type="text"
+          placeholder="Type a word and press Enter"
+          autocomplete="off"
+        />
+        <div class="hint">Each word appears as a bubble. Click × to remove it.</div>
+
+        <div class="chip-list" id="blocked-word-list" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script>
+      const blockedWordInput = document.getElementById("blocked-word-input");
+      const blockedWordList = document.getElementById("blocked-word-list");
+      const blockedWords = new Set(["hate", "violence", "slur"]);
+
+      const renderBlockedWords = () => {
+        blockedWordList.innerHTML = "";
+
+        blockedWords.forEach((word) => {
+          const chip = document.createElement("div");
+          chip.className = "chip";
+          chip.setAttribute("data-word", word);
+
+          const text = document.createElement("span");
+          text.textContent = word;
+
+          const removeButton = document.createElement("button");
+          removeButton.type = "button";
+          removeButton.setAttribute("aria-label", `Remove ${word}`);
+          removeButton.textContent = "×";
+          removeButton.addEventListener("click", () => {
+            blockedWords.delete(word);
+            renderBlockedWords();
+          });
+
+          chip.appendChild(text);
+          chip.appendChild(removeButton);
+          blockedWordList.appendChild(chip);
+        });
+      };
+
+      blockedWordInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") {
+          return;
+        }
+
+        event.preventDefault();
+        const nextWord = blockedWordInput.value.trim().toLowerCase();
+
+        if (!nextWord) {
+          return;
+        }
+
+        blockedWords.add(nextWord);
+        blockedWordInput.value = "";
+        renderBlockedWords();
+      });
+
+      renderBlockedWords();
+    </script>
+  </body>
+</html>
