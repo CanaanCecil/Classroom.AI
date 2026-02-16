@@ -35,8 +35,19 @@
       </div>
       <label class="inline"><input type="checkbox" id="aiEnabled" checked /> AI Enabled</label>
       <button id="saveSettings">Save Settings</button>
-      <button id="logoutBtn" style="background:#5f6b7a;">Logout</button>
+      <button id="logoutBtn" class="secondary">Logout</button>
       <a id="exportLink" href="#">Download Weekly CSV Report</a>
+    </section>
+
+
+    <section class="card">
+      <h2>Safety Filter Words</h2>
+      <p class="muted-text">Add custom words to block for this classroom.</p>
+      <div class="inline-wrap">
+        <input id="blockedWordInput" placeholder="Type word and press Add" maxlength="32" />
+        <button id="addBlockedWordBtn" type="button">Add Word</button>
+      </div>
+      <div id="blockedWordsList" class="chip-list"></div>
     </section>
 
     <section class="card">
