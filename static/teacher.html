@@ -43,6 +43,17 @@
       <a id="exportLink" href="#">Download Weekly CSV Report</a>
     </section>
 
+
+    <section class="card">
+      <h2>Safety Filter Words</h2>
+      <p class="muted-text">Add custom words to block for this classroom.</p>
+      <div class="inline-wrap">
+        <input id="blockedWordInput" placeholder="Type word and press Add" maxlength="32" />
+        <button id="addBlockedWordBtn" type="button">Add Word</button>
+      </div>
+      <div id="blockedWordsList" class="chip-list"></div>
+    </section>
+
     <section class="card">
       <h2>Live Q&A Feed</h2>
       <div id="feed"></div>

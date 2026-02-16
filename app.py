@@ -31,6 +31,10 @@ BAD_WORDS = {
     "sex",
     "drugs",
     "violence",
+    "shit",
+    "fuck",
+    "fucking",
+    "bitch",
 }
 
 STOPWORDS = {
@@ -91,6 +95,15 @@ def init_db():
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (classroom_id) REFERENCES classrooms (id),
                 FOREIGN KEY (interaction_id) REFERENCES interactions (id)
+            );
+
+            CREATE TABLE IF NOT EXISTS blocked_words (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                classroom_id INTEGER NOT NULL,
+                word TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(classroom_id, word),
+                FOREIGN KEY (classroom_id) REFERENCES classrooms (id)
             );
             """
         )
@@ -326,6 +339,8 @@ def post_question(payload):
 
     if not classroom["ai_enabled"]:
         return HTTPStatus.FORBIDDEN, {"error": "AI is turned off by teacher."}
+
+    custom_blocked_words = list_custom_blocked_words(classroom["id"])
 
     blocked = False
     if is_inappropriate_for_words(question, get_classroom_bad_words(classroom)):
@@ -648,6 +663,14 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             status, payload = build_analytics(join_code)
             return json_response(self, status, payload)
 
+        if path == "/api/blocked-words":
+            if not require_teacher_auth(self):
+                return
+            qs = parse_qs(parsed.query)
+            join_code = (qs.get("joinCode") or [""])[0].strip().upper()
+            status, payload = get_blocked_words(join_code)
+            return json_response(self, status, payload)
+
         if path == "/api/export":
             if not require_teacher_auth(self):
                 return
@@ -711,6 +734,18 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             if not require_teacher_auth(self):
                 return
             status, body = moderate_interaction(payload)
+            return json_response(self, status, body)
+
+        if parsed.path == "/api/blocked-words/add":
+            if not require_teacher_auth(self):
+                return
+            status, body = add_blocked_word(payload)
+            return json_response(self, status, body)
+
+        if parsed.path == "/api/blocked-words/remove":
+            if not require_teacher_auth(self):
+                return
+            status, body = remove_blocked_word(payload)
             return json_response(self, status, body)
 
         return text_response(self, HTTPStatus.NOT_FOUND, "Not Found")

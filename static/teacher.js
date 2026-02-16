@@ -10,6 +10,9 @@ const feedEl = document.getElementById('feed');
 const analyticsEl = document.getElementById('analytics');
 const exportLink = document.getElementById('exportLink');
 const logoutBtn = document.getElementById('logoutBtn');
+const blockedWordInputEl = document.getElementById('blockedWordInput');
+const addBlockedWordBtn = document.getElementById('addBlockedWordBtn');
+const blockedWordsListEl = document.getElementById('blockedWordsList');
 
 let customBadWords = [];
 let customBadWordsDirty = false;
@@ -144,6 +147,72 @@ function renderAnalytics(data) {
   `;
 }
 
+
+function renderBlockedWords(words) {
+  if (!words.length) {
+    blockedWordsListEl.innerHTML = '<small>No custom blocked words yet.</small>';
+    return;
+  }
+
+  blockedWordsListEl.innerHTML = words.map((word) => `
+    <div class="chip">
+      <span>${escapeHtml(word)}</span>
+      <button type="button" onclick="window.__removeBlockedWord('${escapeHtml(word)}')" aria-label="Remove ${escapeHtml(word)}">×</button>
+    </div>
+  `).join('');
+}
+
+async function refreshBlockedWords() {
+  const joinCode = joinCodeEl.value.trim().toUpperCase();
+  if (!joinCode) return;
+
+  const res = await fetch(`/api/blocked-words?joinCode=${encodeURIComponent(joinCode)}`);
+  if (res.status === 401) {
+    window.location.href = '/teacher/login';
+    return;
+  }
+  const data = await res.json();
+  if (!res.ok) {
+    blockedWordsListEl.innerHTML = `<small>${escapeHtml(data.error || 'Failed to load blocked words')}</small>`;
+    return;
+  }
+  renderBlockedWords(data.blockedWords || []);
+}
+
+async function addBlockedWord() {
+  const joinCode = joinCodeEl.value.trim().toUpperCase();
+  const word = blockedWordInputEl.value.trim().toLowerCase();
+  if (!joinCode || !word) return;
+
+  const res = await fetch('/api/blocked-words/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ joinCode, word }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || 'Unable to add blocked word');
+    return;
+  }
+  blockedWordInputEl.value = '';
+  await refreshBlockedWords();
+}
+
+async function removeBlockedWord(word) {
+  const joinCode = joinCodeEl.value.trim().toUpperCase();
+  const res = await fetch('/api/blocked-words/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ joinCode, word }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || 'Unable to remove blocked word');
+    return;
+  }
+  await refreshBlockedWords();
+}
+
 async function refreshAll() {
   const joinCode = joinCodeEl.value.trim().toUpperCase();
   if (!joinCode) return;
@@ -189,9 +258,12 @@ async function refreshAll() {
   } else {
     analyticsEl.innerHTML = `<small>${escapeHtml(analyticsData.error || 'Failed to load analytics')}</small>`;
   }
+
+  await refreshBlockedWords();
 }
 
 window.__moderate = moderate;
+window.__removeBlockedWord = removeBlockedWord;
 saveBtn.addEventListener('click', saveSettings);
 logoutBtn.addEventListener('click', logout);
 customBadWordInputEl.addEventListener('keydown', (event) => {
