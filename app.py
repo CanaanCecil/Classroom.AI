@@ -341,9 +341,10 @@ def post_question(payload):
         return HTTPStatus.FORBIDDEN, {"error": "AI is turned off by teacher."}
 
     custom_blocked_words = list_custom_blocked_words(classroom["id"])
+    active_blocked_words = get_classroom_bad_words(classroom) | set(custom_blocked_words)
 
     blocked = False
-    if is_inappropriate_for_words(question, get_classroom_bad_words(classroom)):
+    if is_inappropriate_for_words(question, active_blocked_words):
         blocked = True
         response = "Your question was blocked by the classroom safety filter. Please rephrase respectfully."
     elif not within_topic(question, classroom["topic_limit"]):
@@ -459,6 +460,71 @@ def get_filter_words(join_code):
     custom_words = parse_custom_bad_words(classroom.get("custom_bad_words", "[]"))
     merged = sorted(set(BAD_WORDS) | set(custom_words))
     return HTTPStatus.OK, {"words": merged}
+
+
+def list_custom_blocked_words(classroom_id):
+    with DB_LOCK, db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT word
+            FROM blocked_words
+            WHERE classroom_id = ?
+            ORDER BY word ASC
+            """,
+            (classroom_id,),
+        ).fetchall()
+    return [row["word"] for row in rows]
+
+
+def get_blocked_words(join_code):
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    return HTTPStatus.OK, {"blockedWords": list_custom_blocked_words(classroom["id"])}
+
+
+def add_blocked_word(payload):
+    join_code = str(payload.get("joinCode", "")).strip().upper()
+    word = re.sub(r"\s+", " ", str(payload.get("word", "")).strip().lower())
+    if not join_code or not word:
+        return HTTPStatus.BAD_REQUEST, {"error": "joinCode and word are required."}
+
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    with DB_LOCK, db_connect() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO blocked_words (classroom_id, word, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (classroom["id"], word, dt.datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+
+    return HTTPStatus.OK, {"ok": True, "blockedWords": list_custom_blocked_words(classroom["id"])}
+
+
+def remove_blocked_word(payload):
+    join_code = str(payload.get("joinCode", "")).strip().upper()
+    word = re.sub(r"\s+", " ", str(payload.get("word", "")).strip().lower())
+    if not join_code or not word:
+        return HTTPStatus.BAD_REQUEST, {"error": "joinCode and word are required."}
+
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    with DB_LOCK, db_connect() as conn:
+        conn.execute(
+            "DELETE FROM blocked_words WHERE classroom_id = ? AND word = ?",
+            (classroom["id"], word),
+        )
+        conn.commit()
+
+    return HTTPStatus.OK, {"ok": True, "blockedWords": list_custom_blocked_words(classroom["id"])}
 
 def update_settings(payload):
     join_code = str(payload.get("joinCode", "")).strip().upper()
