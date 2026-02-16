@@ -43,6 +43,14 @@ Default classroom join code: `ABC123`
 
 If no API key is provided or call fails, the app falls back to a local safe explainer.
 
+
+### Preview / routing notes
+
+The app serves the student UI for these paths as well: `/`, `/index.html`, `/student`, and `/preview`.
+This avoids "Not Found" errors in hosted preview environments that use non-root entry paths.
+
+Health check endpoint: `/health`
+
 ## Notes
 
 This is an MVP prototype intended for pilot validation and product iteration.

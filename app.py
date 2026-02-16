@@ -11,6 +11,7 @@ import urllib.request
 from collections import Counter
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import StringIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -105,13 +106,16 @@ def json_response(handler, status, payload):
     handler.wfile.write(data)
 
 
-def text_response(handler, status, text, content_type="text/plain; charset=utf-8"):
-    data = text.encode("utf-8")
+def bytes_response(handler, status, payload, content_type):
     handler.send_response(status)
     handler.send_header("Content-Type", content_type)
-    handler.send_header("Content-Length", str(len(data)))
+    handler.send_header("Content-Length", str(len(payload)))
     handler.end_headers()
-    handler.wfile.write(data)
+    handler.wfile.write(payload)
+
+
+def text_response(handler, status, text, content_type="text/plain; charset=utf-8"):
+    bytes_response(handler, status, text.encode("utf-8"), content_type)
 
 
 def read_json(handler):
@@ -447,7 +451,6 @@ def export_weekly_csv(join_code):
     for r in rows:
         output.append([r[h] for h in header])
 
-    from io import StringIO
     buf = StringIO()
     writer = csv.writer(buf)
     writer.writerows(output)
@@ -455,31 +458,41 @@ def export_weekly_csv(join_code):
     return HTTPStatus.OK, data, "text/csv; charset=utf-8"
 
 
+def is_safe_static_path(rel_path):
+    candidate = (STATIC_DIR / rel_path).resolve()
+    return STATIC_DIR.resolve() in candidate.parents or candidate == STATIC_DIR.resolve()
+
+
 class ClassroomHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
+        path = parsed.path
 
-        if parsed.path == "/":
+        if path in {"/", "/index.html", "/student", "/preview"}:
             return self.serve_file("student.html", "text/html; charset=utf-8")
-        if parsed.path == "/teacher":
+        if path in {"/teacher", "/teacher/"}:
             return self.serve_file("teacher.html", "text/html; charset=utf-8")
-        if parsed.path.startswith("/static/"):
-            rel = parsed.path[len("/static/"):]
+        if path == "/health":
+            return json_response(self, HTTPStatus.OK, {"ok": True})
+        if path == "/favicon.ico":
+            return bytes_response(self, HTTPStatus.NO_CONTENT, b"", "image/x-icon")
+        if path.startswith("/static/"):
+            rel = path[len("/static/"):]
             return self.serve_static(rel)
 
-        if parsed.path == "/api/interactions":
+        if path == "/api/interactions":
             qs = parse_qs(parsed.query)
             join_code = (qs.get("joinCode") or [""])[0].strip().upper()
             status, payload = list_interactions(join_code)
             return json_response(self, status, payload)
 
-        if parsed.path == "/api/analytics":
+        if path == "/api/analytics":
             qs = parse_qs(parsed.query)
             join_code = (qs.get("joinCode") or [""])[0].strip().upper()
             status, payload = build_analytics(join_code)
             return json_response(self, status, payload)
 
-        if parsed.path == "/api/export":
+        if path == "/api/export":
             qs = parse_qs(parsed.query)
             join_code = (qs.get("joinCode") or [""])[0].strip().upper()
             status, data, ctype = export_weekly_csv(join_code)
@@ -491,7 +504,12 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
 
-        return text_response(self, HTTPStatus.NOT_FOUND, "Not found")
+        # Preview environments often hit unknown frontend paths.
+        # Fall back to student UI unless it's clearly an API path.
+        if not path.startswith("/api/"):
+            return self.serve_file("student.html", "text/html; charset=utf-8")
+
+        return text_response(self, HTTPStatus.NOT_FOUND, "Not Found")
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -509,7 +527,7 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             status, body = moderate_interaction(payload)
             return json_response(self, status, body)
 
-        return text_response(self, HTTPStatus.NOT_FOUND, "Not found")
+        return text_response(self, HTTPStatus.NOT_FOUND, "Not Found")
 
     def log_message(self, format, *args):
         return
@@ -517,13 +535,16 @@ class ClassroomHandler(BaseHTTPRequestHandler):
     def serve_file(self, filename, content_type):
         path = STATIC_DIR / filename
         if not path.exists():
-            return text_response(self, HTTPStatus.NOT_FOUND, "Not found")
+            return text_response(self, HTTPStatus.NOT_FOUND, "Not Found")
         text_response(self, HTTPStatus.OK, path.read_text("utf-8"), content_type)
 
     def serve_static(self, rel_path):
+        if not rel_path or ".." in rel_path or not is_safe_static_path(rel_path):
+            return text_response(self, HTTPStatus.BAD_REQUEST, "Invalid static path")
+
         path = STATIC_DIR / rel_path
         if not path.exists() or not path.is_file():
-            return text_response(self, HTTPStatus.NOT_FOUND, "Not found")
+            return text_response(self, HTTPStatus.NOT_FOUND, "Not Found")
 
         ctype = "text/plain; charset=utf-8"
         if rel_path.endswith(".css"):
@@ -534,11 +555,7 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             ctype = "text/html; charset=utf-8"
 
         data = path.read_bytes()
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        bytes_response(self, HTTPStatus.OK, data, ctype)
 
 
 def main():
