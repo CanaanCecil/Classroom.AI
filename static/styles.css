@@ -222,53 +222,40 @@ ul { margin-top: 8px; }
   .card { border-radius: 12px; }
 }
 
-
-.muted-text {
-  margin: 0 0 10px;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.inline-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.inline-wrap input {
-  flex: 1;
-  min-width: 220px;
-}
-
 .chip-list {
-  margin-top: 10px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 6px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  border: 1px solid #cadeff;
   border-radius: 999px;
-  background: #e8f1ff;
-  border: 1px solid #c8ddff;
-  color: #18427f;
+  padding: 5px 10px;
   font-size: 13px;
   font-weight: 600;
 }
 
-.chip button {
-  margin-top: 0;
+.chip-remove {
+  margin: 0;
   border: none;
-  background: #c7dcff;
-  color: #18427f;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
   padding: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: var(--primary-dark);
   line-height: 1;
+}
+
+.chip-remove:hover {
+  box-shadow: none;
+  transform: none;
+  background: #bfdbfe;
 }

@@ -70,6 +70,7 @@ def init_db():
                 grade_level TEXT NOT NULL DEFAULT '6-8',
                 tone TEXT NOT NULL DEFAULT 'simple',
                 topic_limit TEXT NOT NULL DEFAULT '',
+                custom_bad_words TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL
             );
 
@@ -106,6 +107,13 @@ def init_db():
             );
             """
         )
+        classroom_cols = {
+            row["name"] for row in conn.execute("PRAGMA table_info(classrooms)").fetchall()
+        }
+        if "custom_bad_words" not in classroom_cols:
+            conn.execute(
+                "ALTER TABLE classrooms ADD COLUMN custom_bad_words TEXT NOT NULL DEFAULT '[]'"
+            )
         now = dt.datetime.utcnow().isoformat()
         conn.execute(
             """
@@ -200,77 +208,42 @@ def find_classroom(join_code):
         return dict(row) if row else None
 
 
-def normalize_blocked_word(word):
-    cleaned = re.sub(r"[^a-z0-9']+", "", str(word).strip().lower())
-    return cleaned
+def is_inappropriate(question):
+    return is_inappropriate_for_words(question, BAD_WORDS)
 
 
-def list_custom_blocked_words(classroom_id):
-    with DB_LOCK, db_connect() as conn:
-        rows = conn.execute(
-            "SELECT word FROM blocked_words WHERE classroom_id = ? ORDER BY word ASC",
-            (classroom_id,),
-        ).fetchall()
-    return [r["word"] for r in rows]
+def normalize_custom_bad_words(words):
+    normalized = []
+    seen = set()
+    for raw in words:
+        token = re.sub(r"\s+", " ", str(raw).strip().lower())
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        normalized.append(token)
+    return normalized
 
 
-def get_blocked_words(join_code):
-    classroom = find_classroom(join_code)
-    if not classroom:
-        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
-    custom_words = list_custom_blocked_words(classroom["id"])
-    return HTTPStatus.OK, {"blockedWords": custom_words}
+def parse_custom_bad_words(raw_value):
+    if not raw_value:
+        return []
+    try:
+        parsed = json.loads(raw_value)
+    except ValueError:
+        parsed = []
+    if not isinstance(parsed, list):
+        return []
+    return normalize_custom_bad_words(parsed)
 
 
-def add_blocked_word(payload):
-    join_code = str(payload.get("joinCode", "")).strip().upper()
-    classroom = find_classroom(join_code)
-    if not classroom:
-        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
-
-    word = normalize_blocked_word(payload.get("word", ""))
-    if len(word) < 2:
-        return HTTPStatus.BAD_REQUEST, {"error": "Blocked word must be at least 2 characters."}
-
-    now = dt.datetime.utcnow().isoformat()
-    with DB_LOCK, db_connect() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO blocked_words (classroom_id, word, created_at) VALUES (?, ?, ?)",
-            (classroom["id"], word, now),
-        )
-        conn.commit()
-
-    return HTTPStatus.OK, {"ok": True, "word": word}
+def get_classroom_bad_words(classroom):
+    custom_words = parse_custom_bad_words(classroom.get("custom_bad_words", "[]"))
+    return set(BAD_WORDS) | set(custom_words)
 
 
-def remove_blocked_word(payload):
-    join_code = str(payload.get("joinCode", "")).strip().upper()
-    classroom = find_classroom(join_code)
-    if not classroom:
-        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
-
-    word = normalize_blocked_word(payload.get("word", ""))
-    if not word:
-        return HTTPStatus.BAD_REQUEST, {"error": "word is required."}
-
-    with DB_LOCK, db_connect() as conn:
-        conn.execute(
-            "DELETE FROM blocked_words WHERE classroom_id = ? AND word = ?",
-            (classroom["id"], word),
-        )
-        conn.commit()
-
-    return HTTPStatus.OK, {"ok": True}
-
-
-def is_inappropriate(question, extra_words=None):
+def is_inappropriate_for_words(question, bad_words):
     q = question.lower()
-    tokens = set(re.findall(r"[a-z0-9']+", q))
-    blocked_words = set(BAD_WORDS)
-    if extra_words:
-        blocked_words.update(normalize_blocked_word(w) for w in extra_words)
-        blocked_words.discard("")
-    return any(word in tokens for word in blocked_words)
+    return any(w in q for w in bad_words)
 
 
 def within_topic(question, topic_limit):
@@ -370,7 +343,7 @@ def post_question(payload):
     custom_blocked_words = list_custom_blocked_words(classroom["id"])
 
     blocked = False
-    if is_inappropriate(question, custom_blocked_words):
+    if is_inappropriate_for_words(question, get_classroom_bad_words(classroom)):
         blocked = True
         response = "Your question was blocked by the classroom safety filter. Please rephrase respectfully."
     elif not within_topic(question, classroom["topic_limit"]):
@@ -476,6 +449,17 @@ def list_broadcasts(join_code):
     return HTTPStatus.OK, {"broadcasts": [dict(r) for r in rows]}
 
 
+
+
+def get_filter_words(join_code):
+    classroom = find_classroom(join_code)
+    if not classroom:
+        return HTTPStatus.NOT_FOUND, {"error": "Invalid classroom join code."}
+
+    custom_words = parse_custom_bad_words(classroom.get("custom_bad_words", "[]"))
+    merged = sorted(set(BAD_WORDS) | set(custom_words))
+    return HTTPStatus.OK, {"words": merged}
+
 def update_settings(payload):
     join_code = str(payload.get("joinCode", "")).strip().upper()
     classroom = find_classroom(join_code)
@@ -486,15 +470,23 @@ def update_settings(payload):
     grade_level = str(payload.get("gradeLevel", classroom["grade_level"]))
     tone = str(payload.get("tone", classroom["tone"]))
     topic_limit = str(payload.get("topicLimit", classroom["topic_limit"]))
+    custom_bad_words = normalize_custom_bad_words(payload.get("customBadWords", []))
 
     with DB_LOCK, db_connect() as conn:
         conn.execute(
             """
             UPDATE classrooms
-            SET ai_enabled = ?, grade_level = ?, tone = ?, topic_limit = ?
+            SET ai_enabled = ?, grade_level = ?, tone = ?, topic_limit = ?, custom_bad_words = ?
             WHERE id = ?
             """,
-            (ai_enabled, grade_level, tone, topic_limit, classroom["id"]),
+            (
+                ai_enabled,
+                grade_level,
+                tone,
+                topic_limit,
+                json.dumps(custom_bad_words),
+                classroom["id"],
+            ),
         )
         conn.commit()
 
@@ -655,6 +647,12 @@ class ClassroomHandler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             join_code = (qs.get("joinCode") or [""])[0].strip().upper()
             status, payload = list_broadcasts(join_code)
+            return json_response(self, status, payload)
+
+        if path == "/api/filter-words":
+            qs = parse_qs(parsed.query)
+            join_code = (qs.get("joinCode") or [""])[0].strip().upper()
+            status, payload = get_filter_words(join_code)
             return json_response(self, status, payload)
 
         if path == "/api/analytics":
