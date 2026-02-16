@@ -5,6 +5,84 @@ const questionEl = document.getElementById('question');
 const askBtn = document.getElementById('askBtn');
 const responseBox = document.getElementById('responseBox');
 const broadcastsEl = document.getElementById('broadcasts');
+const filterWarningEl = document.getElementById('filterWarning');
+
+let blockedWords = [];
+let filterIntervalId = null;
+
+function normalizeWord(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findBlockedWord(text) {
+  const lowered = String(text || '').toLowerCase();
+  for (const word of blockedWords) {
+    if (word && lowered.includes(word)) {
+      return word;
+    }
+  }
+  return '';
+}
+
+function sanitizeQuestionText() {
+  const current = questionEl.value;
+  let sanitized = current;
+
+  for (const word of blockedWords) {
+    if (!word) {
+      continue;
+    }
+    const pattern = new RegExp(escapeRegExp(word), 'gi');
+    sanitized = sanitized.replace(pattern, '*'.repeat(word.length));
+  }
+
+  if (sanitized !== current) {
+    questionEl.value = sanitized;
+    filterWarningEl.textContent = 'Inappropriate words were removed from your message.';
+  }
+
+  const hasBlocked = !!findBlockedWord(questionEl.value);
+  askBtn.disabled = hasBlocked;
+  if (hasBlocked) {
+    filterWarningEl.textContent = 'Please remove inappropriate words before sending.';
+  } else if (filterWarningEl.textContent === 'Please remove inappropriate words before sending.') {
+    filterWarningEl.textContent = '';
+  }
+}
+
+async function loadFilterWords() {
+  const joinCode = joinCodeEl.value.trim().toUpperCase();
+  if (!joinCode) {
+    blockedWords = [];
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/filter-words?joinCode=${encodeURIComponent(joinCode)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      blockedWords = [];
+      return;
+    }
+    blockedWords = Array.isArray(data.words)
+      ? data.words.map(normalizeWord).filter(Boolean)
+      : [];
+    sanitizeQuestionText();
+  } catch {
+    blockedWords = [];
+  }
+}
+
+function startFilterRefresh() {
+  if (filterIntervalId) {
+    clearInterval(filterIntervalId);
+  }
+  filterIntervalId = setInterval(loadFilterWords, 5000);
+}
 
 async function askQuestion() {
   const payload = {
@@ -16,6 +94,13 @@ async function askQuestion() {
 
   if (!payload.joinCode || !payload.question) {
     responseBox.textContent = 'Please enter a join code and a question.';
+    return;
+  }
+
+  const matchedWord = findBlockedWord(payload.question);
+  if (matchedWord) {
+    filterWarningEl.textContent = `That message includes blocked language (${matchedWord}). Please rephrase.`;
+    askBtn.disabled = false;
     return;
   }
 
@@ -69,5 +154,12 @@ async function refreshBroadcasts() {
 }
 
 askBtn.addEventListener('click', askQuestion);
+questionEl.addEventListener('input', sanitizeQuestionText);
+joinCodeEl.addEventListener('change', async () => {
+  await loadFilterWords();
+  await refreshBroadcasts();
+});
 setInterval(refreshBroadcasts, 5000);
+startFilterRefresh();
+loadFilterWords();
 refreshBroadcasts();
